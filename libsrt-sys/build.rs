@@ -5,9 +5,17 @@ use std::{env, path::PathBuf, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(unix) {
-        let dst = cmake::Config::new("libsrt")
-            .define("ENABLE_APPS", "OFF")
-            .build();
+        let mut cfg = cmake::Config::new("libsrt");
+        cfg.define("ENABLE_APPS", "OFF");
+        #[cfg(feature = "static")]
+        {
+            cfg.define("ENABLE_SHARED", "OFF");
+        }
+        #[cfg(not(feature = "static"))]
+        {
+            cfg.define("ENABLE_STATIC", "OFF");
+        }
+        let dst = cfg.build();
         let dst_dir = Path::new(&dst);
 
         let lib_dirs = ["lib", "lib64"]
@@ -22,7 +30,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for dir in lib_dirs {
             println!("cargo:rustc-link-search={}", dir.display());
         }
-        println!("cargo:rustc-link-lib=srt");
+        #[cfg(feature = "static")]
+        {
+            println!("cargo:rustc-link-lib=static=srt");
+        }
+        #[cfg(not(feature = "static"))]
+        {
+            println!("cargo:rustc-link-lib=srt");
+        }
     } else if cfg!(windows) {
         let dst = cmake::Config::new("libsrt")
             .generator("Visual Studio 16 2019")

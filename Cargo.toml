@@ -20,3 +20,6 @@ os_socketaddr = { git = "https://github.com/nthieu173/os_socketaddr.git", branch
 
 [target.'cfg(windows)'.dependencies]
 winapi = {version = "0.3", features = ["winsock2"] }
+
+[features]
+static = [ "libsrt-sys/static" ]
