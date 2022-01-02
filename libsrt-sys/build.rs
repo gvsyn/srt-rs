@@ -1,16 +1,27 @@
 use bindgen;
 use cmake;
 
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(unix) {
         let dst = cmake::Config::new("libsrt")
             .define("ENABLE_APPS", "OFF")
             .build();
-        let mut lib_dir = PathBuf::from(dst);
-        lib_dir.push("lib");
-        println!("cargo:rustc-link-search={}", lib_dir.display());
+        let dst_dir = Path::new(&dst);
+
+        let lib_dirs = ["lib", "lib64"]
+            .iter()
+            .map(|dir| dst_dir.join(dir) )
+            .filter_map(|dir| {if dst_dir.exists() { Some(dir) } else { None }} )
+            .collect::<Vec<_>>();
+
+        if lib_dirs.is_empty() {
+            panic!("No lib dir in {:?}", dst);
+        }
+        for dir in lib_dirs {
+            println!("cargo:rustc-link-search={}", dir.display());
+        }
         println!("cargo:rustc-link-lib=srt");
     } else if cfg!(windows) {
         let dst = cmake::Config::new("libsrt")
