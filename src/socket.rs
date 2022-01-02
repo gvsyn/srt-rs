@@ -13,6 +13,7 @@ use std::{
     net::{SocketAddr, ToSocketAddrs},
     os::raw::{c_char, c_int},
 };
+use std::num::NonZeroI64;
 
 #[cfg(target_family = "unix")]
 use libc::linger;
@@ -200,6 +201,34 @@ impl SrtSocket {
             Ok(result as usize)
         }
     }
+    pub fn recvmsg2(&self, buf: &mut [u8]) -> Result<(usize, RecvMsgCtrl)> {
+        let mut msg_ctl = libsrt_sys::SRT_MSGCTRL {
+            flags: 0,
+            msgttl: 0,
+            inorder: 0,
+            boundary: 0,
+            srctime: 0,
+            pktseq: 0,
+            msgno: 0,
+            grpdata: std::ptr::null_mut() as *mut libsrt_sys::SRT_SOCKGROUPDATA,
+            grpdata_size: 0,
+        };
+        let result =
+            unsafe { srt::srt_recvmsg2(self.id, buf as *mut [u8] as *mut c_char, buf.len() as i32, &mut msg_ctl as *mut _) };
+        if result == -1 {
+            Err(error::get_last_error())
+        } else {
+            Ok((
+                result as usize,
+                RecvMsgCtrl {
+                    src_time: NonZeroI64::new(msg_ctl.srctime),
+                    pkt_seq: msg_ctl.pktseq,
+                    msg_no: msg_ctl.msgno,
+                    _priv: ()
+                }
+            ))
+        }
+    }
     pub fn get_sender_buffer(&self) -> Result<(usize, usize)> {
         let mut blocks = 0;
         let mut bytes = 0;
@@ -229,6 +258,14 @@ impl SrtSocket {
         )
     }
 }
+
+pub struct RecvMsgCtrl {
+    pub src_time: Option<NonZeroI64>,
+    pub pkt_seq: i32,
+    pub msg_no: i32,
+    _priv: (),
+}
+
 //Public get flag methods
 impl SrtSocket {
     pub fn get_flight_flag_size(&self) -> Result<i32> {

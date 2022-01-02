@@ -24,6 +24,7 @@ use std::{
 pub use socket::{
     SrtCongestionController, SrtKmState, SrtSocket, SrtSocketStatus, SrtTransmissionType,
 };
+use crate::socket::RecvMsgCtrl;
 
 type Result<T> = std::result::Result<T, SrtError>;
 
@@ -626,6 +627,50 @@ impl SrtAsyncStream {
     }
     pub fn get_srt_version(&self) -> Result<i32> {
         self.socket.get_srt_version()
+    }
+    pub fn recvmsg2<T: AsMut<[u8]>>(&self, buf: T) -> RecvMsg2<T> {
+        RecvMsg2 {
+            state: Some(RecvMsg2Inner {
+                socket: self.socket,
+                buf,
+            })
+        }
+    }
+}
+
+pub struct RecvMsg2<T> {
+    state: Option<RecvMsg2Inner<T>>,
+}
+struct RecvMsg2Inner<T> {
+    socket: SrtSocket,
+    buf: T,
+}
+impl<T> Future for RecvMsg2<T>
+    where
+        T: AsMut<[u8]> + std::marker::Unpin,
+{
+    type Output = Result<(usize, RecvMsgCtrl)>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let ref mut inner =
+            self.get_mut().state.as_mut().expect("RecvMsg2 polled after completion");
+        match inner.socket.recvmsg2(inner.buf.as_mut()) {
+            Ok((size, msg_ctrl)) => Poll::Ready(Ok((size, msg_ctrl))),
+            Err(e) => match e {
+                SrtError::AsyncRcv => {
+                    let waker = cx.waker().clone();
+                    let mut epoll = Epoll::new()?;
+                    epoll.add(&inner.socket, &srt::SRT_EPOLL_OPT::SRT_EPOLL_IN)?;
+                    thread::spawn(move || {
+                        if let Ok(_) = epoll.wait(-1) {
+                            waker.wake();
+                        }
+                    });
+                    Poll::Pending
+                }
+                e => Poll::Ready(Err(e.into())),
+            },
+        }
     }
 }
 
