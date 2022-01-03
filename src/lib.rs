@@ -850,28 +850,28 @@ impl Future for AcceptFuture {
 }
 
 pub struct ConnectFuture {
-    socket: SrtSocket,
+    socket: Option<SrtSocket>,
 }
 
 impl Future for ConnectFuture {
     type Output = Result<SrtAsyncStream>;
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.socket.get_socket_state() {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.socket.unwrap().get_socket_state() {
             Ok(s) => match s {
                 SrtSocketStatus::Connected => Poll::Ready(Ok(SrtAsyncStream {
-                    socket: self.socket,
+                    socket: self.socket.take().unwrap(),
                 })),
                 SrtSocketStatus::Broken => Poll::Ready(Err(SrtError::ConnLost)),
                 SrtSocketStatus::Init => Poll::Ready(Err(SrtError::UnboundSock)),
                 SrtSocketStatus::Opened => Poll::Ready(Err(SrtError::InvOp)),
                 SrtSocketStatus::Listening => Poll::Ready(Err(SrtError::InvOp)),
-                SrtSocketStatus::Connecting => match self.socket.get_reject_reason() {
+                SrtSocketStatus::Connecting => match self.socket.unwrap().get_reject_reason() {
                     error::SrtRejectReason::Unknown => {
                         let waker = cx.waker().clone();
                         let mut epoll = Epoll::new()?;
                         let events =
                             srt::SRT_EPOLL_OPT::SRT_EPOLL_OUT | srt::SRT_EPOLL_OPT::SRT_EPOLL_ERR;
-                        epoll.add(&self.socket, &events)?;
+                        epoll.add(&self.socket.unwrap(), &events)?;
                         thread::spawn(move || {
                             if let Ok(_) = epoll.wait(-1) {
                                 waker.wake();
@@ -889,6 +889,11 @@ impl Future for ConnectFuture {
         }
     }
 }
+impl Drop for ConnectFuture {
+    fn drop(&mut self) {
+        self.socket.take().map(|sock| sock.close() );
+    }
+}
 
 pub struct SrtBoundAsyncSocket {
     socket: SrtSocket,
@@ -899,7 +904,7 @@ impl SrtBoundAsyncSocket {
         self.socket.connect(remote)?;
         self.socket.set_receive_blocking(false)?;
         Ok(ConnectFuture {
-            socket: self.socket,
+            socket: Some(self.socket),
         })
     }
     pub fn local_addr(&self) -> Result<SocketAddr> {
@@ -925,7 +930,7 @@ impl SrtAsyncBuilder {
         socket.set_send_blocking(false)?;
         socket.connect(remote)?;
         socket.set_receive_blocking(false)?;
-        Ok(ConnectFuture { socket })
+        Ok(ConnectFuture { socket: Some(socket) })
     }
     pub fn listen<A: ToSocketAddrs>(self, addr: A, backlog: i32) -> Result<SrtAsyncListener> {
         let socket = SrtSocket::new()?;
@@ -941,7 +946,7 @@ impl SrtAsyncBuilder {
         socket.set_send_blocking(false)?;
         socket.rendezvous(local, remote)?;
         socket.set_receive_blocking(false)?;
-        Ok(ConnectFuture { socket })
+        Ok(ConnectFuture { socket: Some(socket) })
     }
 }
 
