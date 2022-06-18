@@ -7,6 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(unix) {
         let dst = cmake::Config::new("libsrt")
             .define("ENABLE_APPS", "OFF")
+            .define("ENABLE_BONDING", "ON")
             .build();
         let mut lib_dir = PathBuf::from(dst);
         lib_dir.push("lib");
