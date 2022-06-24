@@ -1,18 +1,44 @@
 use bindgen;
 use cmake;
 
-use std::{env, path::PathBuf};
+use std::{env, path::Path, path::PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(unix) {
-        let dst = cmake::Config::new("libsrt")
-            .define("ENABLE_APPS", "OFF")
-            .define("ENABLE_BONDING", "ON")
-            .build();
-        let mut lib_dir = PathBuf::from(dst);
-        lib_dir.push("lib");
-        println!("cargo:rustc-link-search={}", lib_dir.display());
-        println!("cargo:rustc-link-lib=srt");
+        let mut cfg = cmake::Config::new("libsrt");
+        cfg.define("ENABLE_APPS", "OFF");
+        cfg.define("ENABLE_BONDING", "ON");
+        #[cfg(feature = "static")]
+        {
+            cfg.define("ENABLE_SHARED", "OFF");
+        }
+        #[cfg(not(feature = "static"))]
+        {
+            cfg.define("ENABLE_STATIC", "OFF");
+        }
+        let dst = cfg.build();
+        let dst_dir = Path::new(&dst);
+
+        let lib_dirs = ["lib", "lib64"]
+            .iter()
+            .map(|dir| dst_dir.join(dir))
+            .filter_map(|dir| if dst_dir.exists() { Some(dir) } else { None })
+            .collect::<Vec<_>>();
+
+        if lib_dirs.is_empty() {
+            panic!("No lib dir in {:?}", dst);
+        }
+        for dir in lib_dirs {
+            println!("cargo:rustc-link-search={}", dir.display());
+        }
+        #[cfg(feature = "static")]
+        {
+            println!("cargo:rustc-link-lib=static=srt");
+        }
+        #[cfg(not(feature = "static"))]
+        {
+            println!("cargo:rustc-link-lib=srt");
+        }
     } else if cfg!(windows) {
         let dst = cmake::Config::new("libsrt")
             .generator("Visual Studio 16 2019")

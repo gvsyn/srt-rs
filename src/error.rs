@@ -64,17 +64,16 @@ impl Error for SrtError {}
 pub fn handle_result<T>(ok: T, return_code: i32) -> Result<T, SrtError> {
     match return_code {
         0 => Ok(ok),
-        -1 => {
-            let mut _errno_loc = 0;
-            let err_no = unsafe { srt::srt_getlasterror(&mut _errno_loc as *mut c_int) };
-            let err = srt::SRT_ERRNO(err_no);
-            match SrtError::from(err) {
-                SrtError::Success => Ok(ok),
-                e => Err(e),
-            }
-        }
+        -1 => Err(get_last_error()),
         e => unreachable!("unrecognized return code {}", e),
     }
+}
+
+pub fn get_last_error() -> SrtError {
+    let mut _errno_loc = 0;
+    let err_no = unsafe { srt::srt_getlasterror(&mut _errno_loc as *mut c_int) };
+    let err = srt::SRT_ERRNO(err_no);
+    SrtError::from(err)
 }
 
 impl From<SrtError> for io::Error {

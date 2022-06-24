@@ -24,6 +24,7 @@ use std::{
 pub use socket::{
     SrtCongestionController, SrtKmState, SrtSocket, SrtSocketStatus, SrtTransmissionType,
 };
+use crate::socket::RecvMsgCtrl;
 
 type Result<T> = std::result::Result<T, SrtError>;
 
@@ -33,6 +34,32 @@ pub fn startup() -> Result<()> {
         Ok(())
     } else {
         error::handle_result((), result)
+    }
+}
+
+pub mod log {
+    pub enum Level {
+        Crit,
+        Err,
+        Warning,
+        Notice,
+        Info,
+        Debug,
+    }
+    impl Level {
+        fn as_cint(&self) -> std::os::raw::c_int {
+            match self {
+                Level::Crit => 2,
+                Level::Err => 3,
+                Level::Warning => 4,
+                Level::Notice => 5,
+                Level::Info => 6,
+                Level::Debug => 7,
+            }
+        }
+    }
+    pub fn set_level(level: Level) {
+        unsafe { super::srt::srt_setloglevel(level.as_cint()) };
     }
 }
 
@@ -627,6 +654,50 @@ impl SrtAsyncStream {
     pub fn get_srt_version(&self) -> Result<i32> {
         self.socket.get_srt_version()
     }
+    pub fn recvmsg2<T: AsMut<[u8]>>(&self, buf: T) -> RecvMsg2<T> {
+        RecvMsg2 {
+            state: Some(RecvMsg2Inner {
+                socket: self.socket,
+                buf,
+            })
+        }
+    }
+}
+
+pub struct RecvMsg2<T> {
+    state: Option<RecvMsg2Inner<T>>,
+}
+struct RecvMsg2Inner<T> {
+    socket: SrtSocket,
+    buf: T,
+}
+impl<T> Future for RecvMsg2<T>
+    where
+        T: AsMut<[u8]> + std::marker::Unpin,
+{
+    type Output = Result<(usize, RecvMsgCtrl)>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let ref mut inner =
+            self.get_mut().state.as_mut().expect("RecvMsg2 polled after completion");
+        match inner.socket.recvmsg2(inner.buf.as_mut()) {
+            Ok((size, msg_ctrl)) => Poll::Ready(Ok((size, msg_ctrl))),
+            Err(e) => match e {
+                SrtError::AsyncRcv => {
+                    let waker = cx.waker().clone();
+                    let mut epoll = Epoll::new()?;
+                    epoll.add(&inner.socket, &srt::SRT_EPOLL_OPT::SRT_EPOLL_IN)?;
+                    thread::spawn(move || {
+                        if let Ok(_) = epoll.wait(-1) {
+                            waker.wake();
+                        }
+                    });
+                    Poll::Pending
+                }
+                e => Poll::Ready(Err(e.into())),
+            },
+        }
+    }
 }
 
 impl AsyncRead for SrtAsyncStream {
@@ -805,28 +876,28 @@ impl Future for AcceptFuture {
 }
 
 pub struct ConnectFuture {
-    socket: SrtSocket,
+    socket: Option<SrtSocket>,
 }
 
 impl Future for ConnectFuture {
     type Output = Result<SrtAsyncStream>;
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.socket.get_socket_state() {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.socket.unwrap().get_socket_state() {
             Ok(s) => match s {
                 SrtSocketStatus::Connected => Poll::Ready(Ok(SrtAsyncStream {
-                    socket: self.socket,
+                    socket: self.socket.take().unwrap(),
                 })),
                 SrtSocketStatus::Broken => Poll::Ready(Err(SrtError::ConnLost)),
                 SrtSocketStatus::Init => Poll::Ready(Err(SrtError::UnboundSock)),
                 SrtSocketStatus::Opened => Poll::Ready(Err(SrtError::InvOp)),
                 SrtSocketStatus::Listening => Poll::Ready(Err(SrtError::InvOp)),
-                SrtSocketStatus::Connecting => match self.socket.get_reject_reason() {
+                SrtSocketStatus::Connecting => match self.socket.unwrap().get_reject_reason() {
                     error::SrtRejectReason::Unknown => {
                         let waker = cx.waker().clone();
                         let mut epoll = Epoll::new()?;
                         let events =
                             srt::SRT_EPOLL_OPT::SRT_EPOLL_OUT | srt::SRT_EPOLL_OPT::SRT_EPOLL_ERR;
-                        epoll.add(&self.socket, &events)?;
+                        epoll.add(&self.socket.unwrap(), &events)?;
                         thread::spawn(move || {
                             if let Ok(_) = epoll.wait(-1) {
                                 waker.wake();
@@ -844,6 +915,11 @@ impl Future for ConnectFuture {
         }
     }
 }
+impl Drop for ConnectFuture {
+    fn drop(&mut self) {
+        self.socket.take().map(|sock| sock.close() );
+    }
+}
 
 pub struct SrtBoundAsyncSocket {
     socket: SrtSocket,
@@ -854,7 +930,7 @@ impl SrtBoundAsyncSocket {
         self.socket.connect(remote)?;
         self.socket.set_receive_blocking(false)?;
         Ok(ConnectFuture {
-            socket: self.socket,
+            socket: Some(self.socket),
         })
     }
     pub fn local_addr(&self) -> Result<SocketAddr> {
@@ -880,7 +956,7 @@ impl SrtAsyncBuilder {
         socket.set_send_blocking(false)?;
         socket.connect(remote)?;
         socket.set_receive_blocking(false)?;
-        Ok(ConnectFuture { socket })
+        Ok(ConnectFuture { socket: Some(socket) })
     }
     pub fn listen<A: ToSocketAddrs>(self, addr: A, backlog: i32) -> Result<SrtAsyncListener> {
         let socket = SrtSocket::new()?;
@@ -896,7 +972,7 @@ impl SrtAsyncBuilder {
         socket.set_send_blocking(false)?;
         socket.rendezvous(local, remote)?;
         socket.set_receive_blocking(false)?;
-        Ok(ConnectFuture { socket })
+        Ok(ConnectFuture { socket: Some(socket) })
     }
 }
 
