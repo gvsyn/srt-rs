@@ -12,10 +12,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             cfg.define("ENABLE_SHARED", "OFF");
         }
-        #[cfg(not(feature = "static"))]
-        {
-            cfg.define("ENABLE_STATIC", "OFF");
-        }
         let dst = cfg.build();
         let dst_dir = Path::new(&dst);
 
@@ -31,14 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for dir in lib_dirs {
             println!("cargo:rustc-link-search={}", dir.display());
         }
-        #[cfg(feature = "static")]
-        {
-            println!("cargo:rustc-link-lib=static=srt");
-        }
-        #[cfg(not(feature = "static"))]
-        {
-            println!("cargo:rustc-link-lib=srt");
-        }
+        println!("cargo:rustc-link-lib=static=srt");
     } else if cfg!(windows) {
         let dst = cmake::Config::new("libsrt")
             .generator("Visual Studio 16 2019")
