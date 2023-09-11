@@ -1,7 +1,7 @@
 [package]
 name = "libsrt-sys"
 version = "1.5.3"
-authors = ["Hieu Nguyen <nthieu173@gmail.com>"]
+authors = ["Hieu Nguyen <nthieu173@gmail.com>", "gvsyn <projects@lostnode.org>"]
 edition = "2018"
 license = "MPL-2.0"
 description = "Bindings for libsrt"
@@ -17,7 +17,7 @@ openssl-sys = "0.7"
 
 [build-dependencies]
 cmake = "0.1"
-bindgen = "0.56"
+bindgen = "0.68"
 
 [features]
 static = []

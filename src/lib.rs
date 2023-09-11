@@ -21,10 +21,10 @@ use std::{
     thread,
 };
 
+use crate::socket::RecvMsgCtrl;
 pub use socket::{
     SrtCongestionController, SrtKmState, SrtSocket, SrtSocketStatus, SrtTransmissionType,
 };
-use crate::socket::RecvMsgCtrl;
 
 type Result<T> = std::result::Result<T, SrtError>;
 
@@ -659,7 +659,7 @@ impl SrtAsyncStream {
             state: Some(RecvMsg2Inner {
                 socket: self.socket,
                 buf,
-            })
+            }),
         }
     }
 }
@@ -672,14 +672,17 @@ struct RecvMsg2Inner<T> {
     buf: T,
 }
 impl<T> Future for RecvMsg2<T>
-    where
-        T: AsMut<[u8]> + std::marker::Unpin,
+where
+    T: AsMut<[u8]> + std::marker::Unpin,
 {
     type Output = Result<(usize, RecvMsgCtrl)>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let ref mut inner =
-            self.get_mut().state.as_mut().expect("RecvMsg2 polled after completion");
+        let ref mut inner = self
+            .get_mut()
+            .state
+            .as_mut()
+            .expect("RecvMsg2 polled after completion");
         match inner.socket.recvmsg2(inner.buf.as_mut()) {
             Ok((size, msg_ctrl)) => Poll::Ready(Ok((size, msg_ctrl))),
             Err(e) => match e {
@@ -917,7 +920,7 @@ impl Future for ConnectFuture {
 }
 impl Drop for ConnectFuture {
     fn drop(&mut self) {
-        self.socket.take().map(|sock| sock.close() );
+        self.socket.take().map(|sock| sock.close());
     }
 }
 
@@ -956,7 +959,9 @@ impl SrtAsyncBuilder {
         socket.set_send_blocking(false)?;
         socket.connect(remote)?;
         socket.set_receive_blocking(false)?;
-        Ok(ConnectFuture { socket: Some(socket) })
+        Ok(ConnectFuture {
+            socket: Some(socket),
+        })
     }
     pub fn listen<A: ToSocketAddrs>(self, addr: A, backlog: i32) -> Result<SrtAsyncListener> {
         let socket = SrtSocket::new()?;
@@ -972,7 +977,9 @@ impl SrtAsyncBuilder {
         socket.set_send_blocking(false)?;
         socket.rendezvous(local, remote)?;
         socket.set_receive_blocking(false)?;
-        Ok(ConnectFuture { socket: Some(socket) })
+        Ok(ConnectFuture {
+            socket: Some(socket),
+        })
     }
 }
 

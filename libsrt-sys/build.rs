@@ -8,6 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut cfg = cmake::Config::new("libsrt");
         cfg.define("ENABLE_APPS", "OFF");
         cfg.define("ENABLE_BONDING", "ON");
+        cfg.define("ENABLE_MAXREXMITBW", "ON");
         #[cfg(feature = "static")]
         {
             cfg.define("ENABLE_SHARED", "OFF");

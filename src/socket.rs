@@ -5,6 +5,7 @@ use libsrt_sys as srt;
 use os_socketaddr::{self, OsSocketAddr};
 use srt::sockaddr;
 
+use std::num::NonZeroI64;
 use std::{
     convert::TryInto,
     ffi::c_void,
@@ -13,7 +14,6 @@ use std::{
     net::{SocketAddr, ToSocketAddrs},
     os::raw::{c_char, c_int},
 };
-use std::num::NonZeroI64;
 
 #[cfg(target_family = "unix")]
 use libc::linger;
@@ -207,13 +207,7 @@ impl SrtSocket {
             byteSentUnique: 0,
             byteRecvUnique: 0,
         };
-        let result = unsafe {
-            srt::srt_bstats(
-                self.id,
-                &mut stats,
-                1
-            )
-        };
+        let result = unsafe { srt::srt_bstats(self.id, &mut stats, 1) };
         handle_result(stats, result)
     }
 }
@@ -307,8 +301,14 @@ impl SrtSocket {
             grpdata: std::ptr::null_mut() as *mut libsrt_sys::SRT_SOCKGROUPDATA,
             grpdata_size: 0,
         };
-        let result =
-            unsafe { srt::srt_recvmsg2(self.id, buf as *mut [u8] as *mut c_char, buf.len() as i32, &mut msg_ctl as *mut _) };
+        let result = unsafe {
+            srt::srt_recvmsg2(
+                self.id,
+                buf as *mut [u8] as *mut c_char,
+                buf.len() as i32,
+                &mut msg_ctl as *mut _,
+            )
+        };
         if result == -1 {
             Err(error::get_last_error())
         } else {
@@ -318,8 +318,8 @@ impl SrtSocket {
                     src_time: NonZeroI64::new(msg_ctl.srctime),
                     pkt_seq: msg_ctl.pktseq,
                     msg_no: msg_ctl.msgno,
-                    _priv: ()
-                }
+                    _priv: (),
+                },
             ))
         }
     }
@@ -502,6 +502,19 @@ impl SrtSocket {
             srt::srt_getsockflag(
                 self.id,
                 srt::SRT_SOCKOPT::SRTO_MAXBW,
+                &mut bytes_per_sec as *mut i64 as *mut c_void,
+                &mut _optlen as *mut c_int,
+            )
+        };
+        error::handle_result(bytes_per_sec, result)
+    }
+    pub fn get_max_rexmit_bandwith(&self) -> Result<i64> {
+        let mut bytes_per_sec = 0;
+        let mut _optlen = mem::size_of::<i32>() as i32;
+        let result = unsafe {
+            srt::srt_getsockflag(
+                self.id,
+                srt::SRT_SOCKOPT::SRTO_MAXREXMITBW,
                 &mut bytes_per_sec as *mut i64 as *mut c_void,
                 &mut _optlen as *mut c_int,
             )
@@ -1057,6 +1070,17 @@ impl SrtSocket {
         };
         error::handle_result((), result)
     }
+    pub fn set_max_rexmit_bandwith(&self, bytes_per_sec: i64) -> Result<()> {
+        let result = unsafe {
+            srt::srt_setsockflag(
+                self.id,
+                srt::SRT_SOCKOPT::SRTO_MAXREXMITBW,
+                &bytes_per_sec as *const i64 as *const c_void,
+                mem::size_of::<i64>() as c_int,
+            )
+        };
+        error::handle_result((), result)
+    }
     pub fn set_message_api(&self, enable: bool) -> Result<()> {
         let result = unsafe {
             srt::srt_setsockflag(
@@ -1212,11 +1236,7 @@ impl SrtSocket {
         error::handle_result((), result)
     }
     pub fn set_retransmission_algorithm(&self, reduced: bool) -> Result<()> {
-        let r = if reduced {
-            1
-        } else {
-            0
-        };
+        let r = if reduced { 1 } else { 0 };
         let result = unsafe {
             srt::srt_setsockflag(
                 self.id,
