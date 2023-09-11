@@ -28,7 +28,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for dir in lib_dirs {
             println!("cargo:rustc-link-search={}", dir.display());
         }
+        #[cfg(feature = "static")]
         println!("cargo:rustc-link-lib=static=srt");
+        #[cfg(not(feature = "static"))]
+        println!("cargo:rustc-link-lib=srt");
     } else if cfg!(windows) {
         let dst = cmake::Config::new("libsrt")
             .generator("Visual Studio 16 2019")
@@ -61,11 +64,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .header("wrapper.h")
         .clang_arg(format!("--include-directory={}", include_path.display()))
         .size_t_is_usize(true)
-        .whitelist_function("srt_.*")
-        .whitelist_type("SRT.*")
-        .whitelist_var("SRT.*")
+        .allowlist_function("srt_.*")
+        .allowlist_type("SRT.*")
+        .allowlist_var("SRT.*")
         .bitfield_enum("SRT_EPOLL_OPT")
-        .default_enum_style(bindgen::EnumVariation::NewType { is_bitfield: false })
+        .default_enum_style(bindgen::EnumVariation::NewType {
+            is_bitfield: false,
+            is_global: false,
+        })
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))

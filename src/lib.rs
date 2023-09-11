@@ -358,6 +358,11 @@ impl SrtBuilder {
         self.opt_vec.push(SrtPreConnectOpt::MaxBW(bytes_per_sec));
         self
     }
+    pub fn set_max_rexmit_bandwith(mut self, bytes_per_sec: i64) -> Self {
+        self.opt_vec
+            .push(SrtPreConnectOpt::MaxRexmitBW(bytes_per_sec));
+        self
+    }
     pub fn set_message_api(mut self, enable: bool) -> Self {
         self.opt_vec.push(SrtPreConnectOpt::MessageApi(enable));
         self
@@ -488,6 +493,7 @@ impl SrtBuilder {
                 SrtPreConnectOpt::Linger(value) => socket.set_linger(value)?,
                 SrtPreConnectOpt::LossMaxTtl(value) => socket.set_max_reorder_tolerance(value)?,
                 SrtPreConnectOpt::MaxBW(value) => socket.set_max_bandwith(value)?,
+                SrtPreConnectOpt::MaxRexmitBW(value) => socket.set_max_rexmit_bandwith(value)?,
                 SrtPreConnectOpt::MessageApi(value) => socket.set_message_api(value)?,
                 SrtPreConnectOpt::MinVersion(value) => socket.set_min_version(value)?,
                 SrtPreConnectOpt::Mss(value) => socket.set_mss(value)?,
@@ -1030,6 +1036,11 @@ impl SrtAsyncBuilder {
         self.opt_vec.push(SrtPreConnectOpt::MaxBW(bytes_per_sec));
         self
     }
+    pub fn set_max_rexmit_bandwith(mut self, bytes_per_sec: i64) -> Self {
+        self.opt_vec
+            .push(SrtPreConnectOpt::MaxRexmitBW(bytes_per_sec));
+        self
+    }
     pub fn set_message_api(mut self, enable: bool) -> Self {
         self.opt_vec.push(SrtPreConnectOpt::MessageApi(enable));
         self
@@ -1160,6 +1171,7 @@ impl SrtAsyncBuilder {
                 SrtPreConnectOpt::Linger(value) => socket.set_linger(value)?,
                 SrtPreConnectOpt::LossMaxTtl(value) => socket.set_max_reorder_tolerance(value)?,
                 SrtPreConnectOpt::MaxBW(value) => socket.set_max_bandwith(value)?,
+                SrtPreConnectOpt::MaxRexmitBW(value) => socket.set_max_rexmit_bandwith(value)?,
                 SrtPreConnectOpt::MessageApi(value) => socket.set_message_api(value)?,
                 SrtPreConnectOpt::MinVersion(value) => socket.set_min_version(value)?,
                 SrtPreConnectOpt::Mss(value) => socket.set_mss(value)?,
@@ -1212,6 +1224,7 @@ enum SrtPreConnectOpt {
     Linger(i32),
     LossMaxTtl(i32),
     MaxBW(i64),
+    MaxRexmitBW(i64),
     MessageApi(bool),
     MinVersion(i32),
     Mss(i32),
