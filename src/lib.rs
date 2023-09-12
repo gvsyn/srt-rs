@@ -164,6 +164,9 @@ impl SrtStream {
     pub fn get_max_bandwith(&self) -> Result<i64> {
         self.socket.get_max_bandwith()
     }
+    pub fn get_max_rexmit_bandwidth(&self) -> Result<i64> {
+        self.socket.get_max_rexmit_bandwidth()
+    }
     pub fn get_mss(&self) -> Result<i32> {
         self.socket.get_mss()
     }
@@ -584,6 +587,9 @@ impl SrtAsyncStream {
     }
     pub fn get_max_bandwith(&self) -> Result<i64> {
         self.socket.get_max_bandwith()
+    }
+    pub fn get_max_rexmit_bandwidth(&self) -> Result<i64> {
+        self.socket.get_max_rexmit_bandwidth()
     }
     pub fn get_mss(&self) -> Result<i32> {
         self.socket.get_mss()

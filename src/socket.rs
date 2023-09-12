@@ -508,6 +508,19 @@ impl SrtSocket {
         };
         error::handle_result(bytes_per_sec, result)
     }
+    pub fn get_max_rexmit_bandwidth(&self) -> Result<i64> {
+        let mut bytes_per_sec = 0;
+        let mut _optlen = mem::size_of::<i32>() as i32;
+        let result = unsafe {
+            srt::srt_getsockflag(
+                self.id,
+                srt::SRT_SOCKOPT::SRTO_MAXREXMITBW,
+                &mut bytes_per_sec as *mut i64 as *mut c_void,
+                &mut _optlen as *mut c_int,
+            )
+        };
+        error::handle_result(bytes_per_sec, result)
+    }
     pub fn get_mss(&self) -> Result<i32> {
         let mut bytes = 0;
         let mut _optlen = mem::size_of::<i32>() as i32;
@@ -878,6 +891,17 @@ impl SrtSocket {
         };
         error::handle_result((), result)
     }
+    pub fn set_max_rexmit_bandwith(&self, bytes_per_sec: i64) -> Result<()> {
+        let result = unsafe {
+            srt::srt_setsockflag(
+                self.id,
+                srt::SRT_SOCKOPT::SRTO_MAXREXMITBW,
+                &bytes_per_sec as *const i64 as *const c_void,
+                mem::size_of::<i64>() as c_int,
+            )
+        };
+        error::handle_result((), result)
+    }
     pub fn set_receive_timeout(&self, msecs: i32) -> Result<()> {
         let result = unsafe {
             srt::srt_setsockflag(
@@ -1051,17 +1075,6 @@ impl SrtSocket {
             srt::srt_setsockflag(
                 self.id,
                 srt::SRT_SOCKOPT::SRTO_MAXBW,
-                &bytes_per_sec as *const i64 as *const c_void,
-                mem::size_of::<i64>() as c_int,
-            )
-        };
-        error::handle_result((), result)
-    }
-    pub fn set_max_rexmit_bandwith(&self, bytes_per_sec: i64) -> Result<()> {
-        let result = unsafe {
-            srt::srt_setsockflag(
-                self.id,
-                srt::SRT_SOCKOPT::SRTO_MAXREXMITBW,
                 &bytes_per_sec as *const i64 as *const c_void,
                 mem::size_of::<i64>() as c_int,
             )
