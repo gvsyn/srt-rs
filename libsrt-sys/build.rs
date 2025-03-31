@@ -8,6 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut cfg = cmake::Config::new("libsrt");
         cfg.define("ENABLE_APPS", "OFF");
         cfg.define("ENABLE_BONDING", "ON");
+        cfg.define("CMAKE_POLICY_VERSION_MINIMUM", "3.5");
         #[cfg(feature = "static")]
         {
             cfg.define("ENABLE_SHARED", "OFF");
